@@ -1,2 +1,4 @@
-﻿ta-lib>=0.4.0
+streamlit
+plotly
+pandas
 ta>=0.10.0
