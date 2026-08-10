@@ -18,14 +18,6 @@ LOGS_DIR = BASE_DIR / "logs"
 DATA_DIR.mkdir(exist_ok=True)
 LOGS_DIR.mkdir(exist_ok=True)
 
-# Investopedia credentials
-INVESTOPEDIA_USERNAME = os.getenv("INVESTOPEDIA_USERNAME", "")
-INVESTOPEDIA_PASSWORD = os.getenv("INVESTOPEDIA_PASSWORD", "")
-
-# Validate credentials
-if not INVESTOPEDIA_USERNAME or not INVESTOPEDIA_PASSWORD:
-    raise ValueError("Missing INVESTOPEDIA_USERNAME or INVESTOPEDIA_PASSWORD in .env file")
-
 # Trading configuration
 DEFAULT_CASH = float(os.getenv("DEFAULT_CASH", "100000"))
 MAX_POSITION_SIZE = float(os.getenv("MAX_POSITION_SIZE", "0.1"))  # 10% of portfolio
