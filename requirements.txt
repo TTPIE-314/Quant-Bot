@@ -2,4 +2,5 @@ streamlit
 plotly
 pandas
 yfinance
+python-dotenv
 ta>=0.10.0
