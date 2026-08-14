@@ -1,2 +1,4 @@
-﻿ta-lib>=0.4.0
-ta>=0.10.0
+﻿streamlit
+plotly
+pandas
+ta-lib>=0.10.0zs cvbcrypt>=4.0.0
