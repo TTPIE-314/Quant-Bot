@@ -6,3 +6,4 @@ streamlit
 plotly
 bcrypt
 pytest
+python-dotenv
