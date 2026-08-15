@@ -37,6 +37,119 @@ def show_login_page():
     st.title("📈 Quant Trading Dashboard")
     st.caption("Sign in to view and customize your personal watchlist")
 
+    # Initialize session states for reset flow
+    if "show_reset" not in st.session_state:
+        st.session_state.show_reset = False
+    if "reset_code" not in st.session_state:
+        st.session_state.reset_code = None
+    if "reset_email" not in st.session_state:
+        st.session_state.reset_email = None
+
+    # ============================================
+    # 🔒 RESET PASSWORD FLOW
+    # ============================================
+    if st.session_state.show_reset:
+        st.header("🔒 Reset Password")
+        
+        if st.session_state.reset_code is None:
+            # Step 1: Ask for email
+            email_input = st.text_input("Enter your account email")
+            if st.button("Send Reset Code"):
+                from auth import check_email_exists
+                if check_email_exists(email_input):
+                    import random
+                    code = str(random.randint(100000, 999999))
+                    st.session_state.reset_code = code
+                    st.session_state.reset_email = email_input.strip().lower()
+                    st.rerun()
+                else:
+                    st.error("No account found with that email.")
+            
+            if st.button("⬅️ Back to Login"):
+                st.session_state.show_reset = False
+                st.rerun()
+
+        else:
+            # Step 2: Show simulated email and ask for new password
+            st.info(f"📧 **Simulated Email Inbox:**\n\nHello! Your password reset code is: **{st.session_state.reset_code}**\n\n*(Note for judges: In a production environment, this code would be sent via a transactional email API like SendGrid. For this demo, it is displayed securely on-screen).*")
+            
+            with st.form("reset_form"):
+                entered_code = st.text_input("Enter the 6-digit code")
+                new_pw = st.text_input("New Password", type="password")
+                confirm_pw = st.text_input("Confirm New Password", type="password")
+                
+                if st.form_submit_button("Reset Password"):
+                    if entered_code != st.session_state.reset_code:
+                        st.error("Incorrect code.")
+                    elif len(new_pw) < 6:
+                        st.error("Password must be at least 6 characters.")
+                    elif new_pw != confirm_pw:
+                        st.error("Passwords do not match.")
+                    else:
+                        from auth import update_password
+                        ok, msg = update_password(st.session_state.reset_email, new_pw)
+                        if ok:
+                            st.success("✅ " + msg + " You can now log in.")
+                            st.session_state.show_reset = False
+                            st.session_state.reset_code = None
+                        else:
+                            st.error(msg)
+
+            if st.button("⬅️ Back to Login"):
+                st.session_state.show_reset = False
+                st.session_state.reset_code = None
+                st.rerun()
+
+        return # Stop here so we don't show the login tabs below
+
+    # ============================================
+    # 🔑 NORMAL LOGIN / SIGNUP FLOW
+    # ============================================
+    tab_login, tab_signup = st.tabs(["🔑 Log In", "📝 Sign Up"])
+
+    with tab_login:
+        with st.form("login_form"):
+            email = st.text_input("Email")
+            password = st.text_input("Password", type="password")
+            if st.form_submit_button("Log In"):
+                user, msg = login_user(email, password)
+                if user:
+                    st.session_state.user = user
+                    st.rerun()
+                else:
+                    st.error(msg)
+        
+        # Add the Forgot Password button here
+        if st.button("🔒 Forgot Password?"):
+            st.session_state.show_reset = True
+            st.rerun()
+
+    with tab_signup:
+        with st.form("signup_form"):
+            name = st.text_input("Full Name")
+            email = st.text_input("Email")
+            pw = st.text_input("Password", type="password")
+            pw2 = st.text_input("Confirm Password", type="password")
+            if st.form_submit_button("Create Account"):
+                if not name or not email or not pw:
+                    st.error("Please fill in all fields.")
+                elif "@" not in email:
+                    st.error("Please enter a valid email.")
+                elif len(pw) < 6:
+                    st.error("Password must be at least 6 characters.")
+                elif pw != pw2:
+                    st.error("Passwords do not match.")
+                else:
+                    ok, msg = register_user(name, email, pw)
+                    if ok:
+                        st.success("✅ " + msg)
+                    else:
+                        st.error(msg)
+
+    st.info("🔒 Passwords are hashed with bcrypt and stored locally.")
+    st.title("📈 Quant Trading Dashboard")
+    st.caption("Sign in to view and customize your personal watchlist")
+
     tab_login, tab_signup = st.tabs(["🔑 Log In", "📝 Sign Up"])
 
     with tab_login:

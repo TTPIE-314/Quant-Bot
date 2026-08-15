@@ -53,3 +53,18 @@ def login_user(email, password):
     if bcrypt.checkpw(password.encode(), user["password_hash"].encode()):
         return user, "Login successful!"
     return None, "Incorrect password."
+
+def check_email_exists(email):
+    """Check if an email is registered"""
+    users = _load_users()
+    return email.strip().lower() in users
+
+def update_password(email, new_password):
+    """Update a user's password"""
+    users = _load_users()
+    email = email.strip().lower()
+    if email not in users:
+        return False, "No account found."
+    users[email]["password_hash"] = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+    _save_users(users)
+    return True, "Password updated successfully!"
