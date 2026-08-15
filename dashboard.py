@@ -92,6 +92,7 @@ def show_login_page():
                             st.success("✅ " + msg + " You can now log in.")
                             st.session_state.show_reset = False
                             st.session_state.reset_code = None
+                            st.session_state.reset_email = None
                         else:
                             st.error(msg)
 
@@ -100,7 +101,7 @@ def show_login_page():
                 st.session_state.reset_code = None
                 st.rerun()
 
-        return # Stop here so we don't show the login tabs below
+        return  # Stop here so we don't show the login tabs below
 
     # ============================================
     # 🔑 NORMAL LOGIN / SIGNUP FLOW
@@ -119,7 +120,6 @@ def show_login_page():
                 else:
                     st.error(msg)
         
-        # Add the Forgot Password button here
         if st.button("🔒 Forgot Password?"):
             st.session_state.show_reset = True
             st.rerun()
@@ -147,46 +147,6 @@ def show_login_page():
                         st.error(msg)
 
     st.info("🔒 Passwords are hashed with bcrypt and stored locally.")
-    st.title("📈 Quant Trading Dashboard")
-    st.caption("Sign in to view and customize your personal watchlist")
-
-    tab_login, tab_signup = st.tabs(["🔑 Log In", "📝 Sign Up"])
-
-    with tab_login:
-        with st.form("login_form"):
-            email = st.text_input("Email")
-            password = st.text_input("Password", type="password")
-            if st.form_submit_button("Log In"):
-                user, msg = login_user(email, password)
-                if user:
-                    st.session_state.user = user
-                    st.rerun()
-                else:
-                    st.error(msg)
-
-    with tab_signup:
-        with st.form("signup_form"):
-            name = st.text_input("Full Name")
-            email = st.text_input("Email")
-            pw = st.text_input("Password", type="password")
-            pw2 = st.text_input("Confirm Password", type="password")
-            if st.form_submit_button("Create Account"):
-                if not name or not email or not pw:
-                    st.error("Please fill in all fields.")
-                elif "@" not in email:
-                    st.error("Please enter a valid email.")
-                elif len(pw) < 6:
-                    st.error("Password must be at least 6 characters.")
-                elif pw != pw2:
-                    st.error("Passwords do not match.")
-                else:
-                    ok, msg = register_user(name, email, pw)
-                    if ok:
-                        st.success("✅ " + msg)
-                    else:
-                        st.error(msg)
-
-    st.info("🔒 Passwords are hashed with bcrypt and stored locally in `data/users.json`.")
 
 
 # ============================================
