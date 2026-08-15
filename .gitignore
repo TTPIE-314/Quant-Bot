@@ -34,3 +34,5 @@ Thumbs.db
 
 # Jupyter
 .ipynb_checkpoints/
+data/users.json
+data/watchlists.json

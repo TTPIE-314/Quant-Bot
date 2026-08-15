@@ -1,258 +1,221 @@
 ﻿"""
 ============================================
-📈 QUANT TRADING DASHBOARD
+📈 QUANT TRADING DASHBOARD (Multi-User)
 ============================================
-Streamlit dashboard for monitoring signals and portfolio
 Run with: streamlit run dashboard.py
 """
+import sys
+from pathlib import Path
+from datetime import datetime
+
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-import plotly.express as px
-from datetime import datetime
-import sys
-from pathlib import Path
 
-# Add src to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from signals import SignalGenerator
-from config import STRATEGY_CONFIG, WATCHLIST
+from config import STRATEGY_CONFIG
+from auth import login_user, register_user
+from user_data import get_watchlist, save_watchlist, DEFAULT_WATCHLIST
 
-# Page config
-st.set_page_config(
-    page_title="Quant Trading Dashboard",
-    page_icon="📈",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="Quant Trading Dashboard", page_icon="📈", layout="wide")
 
-# Custom CSS
-st.markdown("""
-<style>
-.metric-card {
-    background-color: #f0f2f6;
-    padding: 1rem;
-    border-radius: 0.5rem;
-    border-left: 4px solid #4CAF50;
-}
-.buy-signal { border-left-color: #4CAF50; }
-.sell-signal { border-left-color: #f44336; }
-.hold-signal { border-left-color: #ff9800; }
-</style>
-""", unsafe_allow_html=True)
+if "user" not in st.session_state:
+    st.session_state.user = None
 
-# Title
-st.title("📈 Quant Trading Dashboard")
-st.caption(f"Last updated: {datetime.now():%Y-%m-%d %H:%M:%S}")
 
-# Sidebar
-st.sidebar.header("⚙️ Settings")
-selected_symbol = st.sidebar.selectbox("📊 Select Symbol", WATCHLIST, index=0)
-auto_refresh = st.sidebar.checkbox("🔄 Auto Refresh", value=False)
-show_all_signals = st.sidebar.checkbox("📋 Show All Signals", value=True)
-
-# Initialize signal generator
 @st.cache_resource
 def get_generator():
     return SignalGenerator(STRATEGY_CONFIG)
 
-generator = get_generator()
 
-# Generate signals
-try:
-    df = generator.generate_signals(selected_symbol)
-    signal = generator.get_latest_signal(selected_symbol)
-except Exception as e:
-    st.error(f"❌ Error fetching data for {selected_symbol}: {e}")
-    st.stop()
+# ============================================
+# 🔐 LOGIN / SIGNUP PAGE
+# ============================================
+def show_login_page():
+    st.title("📈 Quant Trading Dashboard")
+    st.caption("Sign in to view and customize your personal watchlist")
 
-# Metrics Row
-col1, col2, col3, col4, col5 = st.columns(5)
+    tab_login, tab_signup = st.tabs(["🔑 Log In", "📝 Sign Up"])
 
-with col1:
-    delta = signal['change_pct']
-    st.metric(
-        label="💰 Price",
-        value=f"${signal['price']:.2f}",
-        delta=f"{delta:.2f}%",
-        delta_color="normal"
-    )
+    with tab_login:
+        with st.form("login_form"):
+            email = st.text_input("Email")
+            password = st.text_input("Password", type="password")
+            if st.form_submit_button("Log In"):
+                user, msg = login_user(email, password)
+                if user:
+                    st.session_state.user = user
+                    st.rerun()
+                else:
+                    st.error(msg)
 
-with col2:
-    action = signal['action']
-    st.metric(
-        label="🎯 Signal",
-        value=action,
-        delta=None
-    )
+    with tab_signup:
+        with st.form("signup_form"):
+            name = st.text_input("Full Name")
+            email = st.text_input("Email")
+            pw = st.text_input("Password", type="password")
+            pw2 = st.text_input("Confirm Password", type="password")
+            if st.form_submit_button("Create Account"):
+                if not name or not email or not pw:
+                    st.error("Please fill in all fields.")
+                elif "@" not in email:
+                    st.error("Please enter a valid email.")
+                elif len(pw) < 6:
+                    st.error("Password must be at least 6 characters.")
+                elif pw != pw2:
+                    st.error("Passwords do not match.")
+                else:
+                    ok, msg = register_user(name, email, pw)
+                    if ok:
+                        st.success("✅ " + msg)
+                    else:
+                        st.error(msg)
 
-with col3:
-    st.metric(
-        label="📊 Score",
-        value=signal['signal_score'],
-        delta=None
-    )
+    st.info("🔒 Passwords are hashed with bcrypt and stored locally in `data/users.json`.")
 
-with col4:
-    st.metric(
-        label="💪 Strength",
-        value=f"{signal['signal_strength']:.1f}%",
-        delta=None
-    )
 
-with col5:
-    rsi = signal['indicators']['RSI']
-    st.metric(
-        label="📈 RSI",
-        value=f"{rsi:.1f}",
-        delta=None
-    )
+# ============================================
+# 🧩 WATCHLIST MANAGER (sidebar)
+# ============================================
+def watchlist_manager(email, watchlist):
+    st.sidebar.header("➕ Customize Watchlist")
+    new_ticker = st.sidebar.text_input("Add a ticker", placeholder="e.g. UBER").upper().strip()
 
-# Signal badge
-if action == 'BUY':
-    st.success(f"🟢 **BUY SIGNAL** - Score: {signal['signal_score']} | Strength: {signal['signal_strength']:.1f}%")
-elif action == 'SELL':
-    st.error(f"🔴 **SELL SIGNAL** - Score: {signal['signal_score']} | Strength: {signal['signal_strength']:.1f}%")
-else:
-    st.warning(f"🟡 **HOLD** - Score: {signal['signal_score']} | Strength: {signal['signal_strength']:.1f}%")
+    if st.sidebar.button("➕ Add Stock", use_container_width=True):
+        if not new_ticker:
+            st.sidebar.warning("Type a symbol first.")
+        elif new_ticker in watchlist:
+            st.sidebar.warning(f"{new_ticker} is already in your list.")
+        else:
+            import yfinance as yf
+            try:
+                df = yf.download(new_ticker, period="5d", progress=False)
+                if isinstance(df.columns, pd.MultiIndex):
+                    df.columns = df.columns.get_level_values(0)
+                valid = not df.empty
+            except Exception:
+                valid = False
+            if valid:
+                watchlist.append(new_ticker)
+                save_watchlist(email, watchlist)
+                st.rerun()
+            else:
+                st.sidebar.error(f"'{new_ticker}' not found. Check the symbol.")
 
-# Price Chart
-st.subheader(f"📊 {selected_symbol} Price Chart")
+    st.sidebar.caption(f"📋 Your list: {len(watchlist)} stocks")
+    for sym in list(watchlist):
+        c1, c2 = st.sidebar.columns([4, 1])
+        c1.markdown(f"`{sym}`")
+        if c2.button("❌", key=f"rm_{sym}"):
+            watchlist.remove(sym)
+            save_watchlist(email, watchlist)
+            st.rerun()
 
-fig = go.Figure()
-fig.add_trace(go.Candlestick(
-    x=df.index,
-    open=df['Open'],
-    high=df['High'],
-    low=df['Low'],
-    close=df['Close'],
-    name='Price'
-))
-fig.add_trace(go.Scatter(
-    x=df.index,
-    y=df['SMA_short'],
-    name=f"SMA {STRATEGY_CONFIG['sma_short']}",
-    line=dict(color='orange', width=1.5)
-))
-fig.add_trace(go.Scatter(
-    x=df.index,
-    y=df['SMA_long'],
-    name=f"SMA {STRATEGY_CONFIG['sma_long']}",
-    line=dict(color='blue', width=1.5)
-))
-fig.add_trace(go.Scatter(
-    x=df.index,
-    y=df['BB_upper'],
-    name='BB Upper',
-    line=dict(color='gray', width=1, dash='dash'),
-    opacity=0.5
-))
-fig.add_trace(go.Scatter(
-    x=df.index,
-    y=df['BB_lower'],
-    name='BB Lower',
-    line=dict(color='gray', width=1, dash='dash'),
-    opacity=0.5
-))
-fig.update_layout(
-    height=500,
-    xaxis_rangeslider_visible=False,
-    template='plotly_white',
-    legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
-)
-st.plotly_chart(fig, use_container_width=True)
+    if st.sidebar.button("🔄 Reset to default 20", use_container_width=True):
+        save_watchlist(email, list(DEFAULT_WATCHLIST))
+        st.rerun()
 
-# Indicators
-col1, col2 = st.columns(2)
 
-with col1:
-    st.subheader("📈 RSI (Relative Strength Index)")
-    fig_rsi = go.Figure()
-    fig_rsi.add_trace(go.Scatter(x=df.index, y=df['RSI'], name='RSI', line=dict(color='purple')))
-    fig_rsi.add_hline(y=70, line_dash="dash", line_color="red", opacity=0.5, annotation_text="Overbought")
-    fig_rsi.add_hline(y=30, line_dash="dash", line_color="green", opacity=0.5, annotation_text="Oversold")
-    fig_rsi.add_hline(y=50, line_dash="dot", line_color="gray", opacity=0.3)
-    fig_rsi.update_layout(height=300, template='plotly_white', yaxis_range=[0, 100])
-    st.plotly_chart(fig_rsi, use_container_width=True)
+# ============================================
+# 📊 MAIN DASHBOARD
+# ============================================
+def show_dashboard(user):
+    email = user["email"]
+    watchlist = get_watchlist(email)
+    gen = get_generator()
 
-with col2:
-    st.subheader("📊 MACD (Moving Average Convergence Divergence)")
-    fig_macd = go.Figure()
-    fig_macd.add_trace(go.Scatter(x=df.index, y=df['MACD'], name='MACD', line=dict(color='blue')))
-    fig_macd.add_trace(go.Scatter(x=df.index, y=df['MACD_signal'], name='Signal', line=dict(color='red')))
-    fig_macd.add_trace(go.Bar(x=df.index, y=df['MACD_hist'], name='Histogram', marker_color='gray', opacity=0.5))
-    fig_macd.update_layout(height=300, template='plotly_white')
-    st.plotly_chart(fig_macd, use_container_width=True)
+    st.sidebar.title(f"👋 {user['name']}")
+    st.sidebar.caption(email)
+    if st.sidebar.button("🚪 Log Out", use_container_width=True):
+        st.session_state.user = None
+        st.rerun()
 
-# Bollinger Bands Position
-st.subheader("📊 Bollinger Bands Position")
-fig_bb = go.Figure()
-fig_bb.add_trace(go.Scatter(x=df.index, y=df['BB_position'], name='BB Position', line=dict(color='teal')))
-fig_bb.add_hline(y=0.8, line_dash="dash", line_color="red", opacity=0.5, annotation_text="Overbought")
-fig_bb.add_hline(y=0.2, line_dash="dash", line_color="green", opacity=0.5, annotation_text="Oversold")
-fig_bb.update_layout(height=250, template='plotly_white', yaxis_range=[0, 1])
-st.plotly_chart(fig_bb, use_container_width=True)
+    selected = None
+    if watchlist:
+        selected = st.sidebar.selectbox("📊 Select Symbol", watchlist)
 
-# All Signals Table
-if show_all_signals:
-    st.subheader("📋 All Watchlist Signals")
-    
-    signals_data = []
-    for sym in WATCHLIST:
+    watchlist_manager(email, watchlist)
+
+    st.title("📈 Quant Trading Dashboard")
+    st.caption(f"Last updated: {datetime.now():%Y-%m-%d %H:%M:%S}")
+
+    if not watchlist:
+        st.warning("Your watchlist is empty — add a stock in the sidebar!")
+        st.stop()
+
+    try:
+        df = gen.generate_signals(selected)
+        signal = gen.get_latest_signal(selected)
+    except Exception as e:
+        st.error(f"❌ Error fetching data for {selected}: {e}")
+        st.stop()
+
+    # Metrics row
+    col1, col2, col3, col4, col5 = st.columns(5)
+    col1.metric("💰 Price", f"${signal['price']:.2f}", f"{signal['change_pct']:.2f}%")
+    col2.metric("🎯 Signal", signal['action'])
+    col3.metric("📊 Score", signal['signal_score'])
+    col4.metric("💪 Strength", f"{signal['signal_strength']:.1f}%")
+    col5.metric("📈 RSI", f"{signal['indicators']['RSI']:.1f}")
+
+    if signal['action'] == 'BUY':
+        st.success(f"🟢 **BUY SIGNAL** — Score {signal['signal_score']} | Strength {signal['signal_strength']:.1f}%")
+    elif signal['action'] == 'SELL':
+        st.error(f"🔴 **SELL SIGNAL** — Score {signal['signal_score']} | Strength {signal['signal_strength']:.1f}%")
+    else:
+        st.warning(f"🟡 **HOLD** — Score {signal['signal_score']} | Strength {signal['signal_strength']:.1f}%")
+
+    # Price chart
+    fig = go.Figure()
+    fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'],
+                                 low=df['Low'], close=df['Close'], name='Price'))
+    fig.add_trace(go.Scatter(x=df.index, y=df['SMA_short'], name='SMA short', line=dict(color='orange', width=1.5)))
+    fig.add_trace(go.Scatter(x=df.index, y=df['SMA_long'], name='SMA long', line=dict(color='blue', width=1.5)))
+    fig.update_layout(height=500, xaxis_rangeslider_visible=False, template='plotly_white')
+    st.plotly_chart(fig, use_container_width=True)
+
+    # RSI + MACD
+    c1, c2 = st.columns(2)
+    with c1:
+        fig_rsi = go.Figure()
+        fig_rsi.add_trace(go.Scatter(x=df.index, y=df['RSI'], line=dict(color='purple')))
+        fig_rsi.add_hline(y=70, line_dash="dash", line_color="red")
+        fig_rsi.add_hline(y=30, line_dash="dash", line_color="green")
+        fig_rsi.update_layout(height=300, template='plotly_white', yaxis_range=[0, 100])
+        st.plotly_chart(fig_rsi, use_container_width=True)
+    with c2:
+        fig_macd = go.Figure()
+        fig_macd.add_trace(go.Scatter(x=df.index, y=df['MACD'], line=dict(color='blue')))
+        fig_macd.add_trace(go.Scatter(x=df.index, y=df['MACD_signal'], line=dict(color='red')))
+        fig_macd.update_layout(height=300, template='plotly_white')
+        st.plotly_chart(fig_macd, use_container_width=True)
+
+    # Signals table for the user's personal watchlist
+    st.subheader("📋 Your Watchlist Signals")
+    rows = []
+    for sym in watchlist:
         try:
-            sig = generator.get_latest_signal(sym)
-            signals_data.append({
-                'Symbol': sig['symbol'],
-                'Price': sig['price'],
-                'Action': sig['action'],
-                'Score': sig['signal_score'],
-                'Strength': sig['signal_strength'],
-                'RSI': sig['indicators']['RSI'],
-                'Change %': sig['change_pct']
+            s = gen.get_latest_signal(sym)
+            rows.append({
+                'Symbol': sym,
+                'Price': f"${s['price']:.2f}",
+                'Action': s['action'],
+                'Score': s['signal_score'],
+                'Strength': f"{s['signal_strength']:.1f}%",
+                'RSI': f"{s['indicators']['RSI']:.1f}",
             })
         except Exception:
             pass
-    
-    if signals_data:
-        signals_df = pd.DataFrame(signals_data)
-        
-        # Format columns
-        signals_df['Price'] = signals_df['Price'].apply(lambda x: f"${x:.2f}")
-        signals_df['Strength'] = signals_df['Strength'].apply(lambda x: f"{x:.1f}%")
-        signals_df['RSI'] = signals_df['RSI'].apply(lambda x: f"{x:.1f}")
-        signals_df['Change %'] = signals_df['Change %'].apply(lambda x: f"{x:.2f}%")
-        
-        # Highlight buy/sell signals
-        def highlight_action(row):
-            if row['Action'] == 'BUY':
-                return ['background-color: #d4edda; color: #155724'] * len(row)
-            elif row['Action'] == 'SELL':
-                return ['background-color: #f8d7da; color: #721c24'] * len(row)
-            return [''] * len(row)
-        
-        st.dataframe(
-            signals_df.style.apply(highlight_action, axis=1),
-            use_container_width=True,
-            hide_index=True
-        )
-        
-        # Summary stats
-        col1, col2, col3 = st.columns(3)
-        buy_count = len(signals_df[signals_df['Action'] == 'BUY'])
-        sell_count = len(signals_df[signals_df['Action'] == 'SELL'])
-        hold_count = len(signals_df[signals_df['Action'] == 'HOLD'])
-        
-        col1.metric("🟢 Buy Signals", buy_count)
-        col2.metric("🔴 Sell Signals", sell_count)
-        col3.metric("🟡 Hold Signals", hold_count)
+    if rows:
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
-# Footer
-st.markdown("---")
-st.caption("🤖 Quant Trading Bot Dashboard | For educational purposes only")
 
-# Auto-refresh
-if auto_refresh:
-    import time
-    time.sleep(30)
-    st.rerun()
+# ============================================
+# 🚦 APP ENTRY POINT
+# ============================================
+if st.session_state.user:
+    show_dashboard(st.session_state.user)
+else:
+    show_login_page()
