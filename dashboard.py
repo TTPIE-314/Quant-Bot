@@ -1,6 +1,6 @@
-﻿"""
+"""
 ============================================
-📈 QUANT TRADING DASHBOARD (Multi-User)
+QUANT TRADING DASHBOARD (Multi-User)
 ============================================
 Run with: streamlit run dashboard.py
 """
@@ -19,7 +19,7 @@ from config import STRATEGY_CONFIG
 from auth import login_user, register_user
 from user_data import get_watchlist, save_watchlist, DEFAULT_WATCHLIST
 
-st.set_page_config(page_title="Quant Trading Dashboard", page_icon="📈", layout="wide")
+st.set_page_config(page_title="Quant Trading Dashboard", page_icon="", layout="wide")
 
 if "user" not in st.session_state:
     st.session_state.user = None
@@ -31,10 +31,10 @@ def get_generator():
 
 
 # ============================================
-# 🔐 LOGIN / SIGNUP PAGE
+# LOGIN / SIGNUP PAGE
 # ============================================
 def show_login_page():
-    st.title("📈 Quant Trading Dashboard")
+    st.title("Quant Trading Dashboard")
     st.caption("Sign in to view and customize your personal watchlist")
 
     # Initialize session states for reset flow
@@ -46,11 +46,11 @@ def show_login_page():
         st.session_state.reset_email = None
 
     # ============================================
-    # 🔒 RESET PASSWORD FLOW
+    # RESET PASSWORD FLOW
     # ============================================
     if st.session_state.show_reset:
-        st.header("🔒 Reset Password")
-        
+        st.header("Reset Password")
+
         if st.session_state.reset_code is None:
             # Step 1: Ask for email
             email_input = st.text_input("Enter your account email")
@@ -64,20 +64,23 @@ def show_login_page():
                     st.rerun()
                 else:
                     st.error("No account found with that email.")
-            
-            if st.button("⬅️ Back to Login"):
+
+            if st.button("Back to Login"):
                 st.session_state.show_reset = False
                 st.rerun()
 
         else:
             # Step 2: Show simulated email and ask for new password
-            st.info(f"📧 **Simulated Email Inbox:**\n\nHello! Your password reset code is: **{st.session_state.reset_code}**\n\n*(Note for judges: In a production environment, this code would be sent via a transactional email API like SendGrid. For this demo, it is displayed securely on-screen).*")
-            
+            st.info(
+                f"Simulated Email Inbox:\n\nHello! Your password reset code is: **{st.session_state.reset_code}**\n\n"
+                "*(Note for judges: In a production environment, this code would be sent automatically to the user's email.)"
+            )
+
             with st.form("reset_form"):
                 entered_code = st.text_input("Enter the 6-digit code")
                 new_pw = st.text_input("New Password", type="password")
                 confirm_pw = st.text_input("Confirm New Password", type="password")
-                
+
                 if st.form_submit_button("Reset Password"):
                     if entered_code != st.session_state.reset_code:
                         st.error("Incorrect code.")
@@ -89,14 +92,14 @@ def show_login_page():
                         from auth import update_password
                         ok, msg = update_password(st.session_state.reset_email, new_pw)
                         if ok:
-                            st.success("✅ " + msg + " You can now log in.")
+                            st.success("Success: " + msg + " You can now log in.")
                             st.session_state.show_reset = False
                             st.session_state.reset_code = None
                             st.session_state.reset_email = None
                         else:
                             st.error(msg)
 
-            if st.button("⬅️ Back to Login"):
+            if st.button("Back to Login"):
                 st.session_state.show_reset = False
                 st.session_state.reset_code = None
                 st.rerun()
@@ -104,9 +107,9 @@ def show_login_page():
         return  # Stop here so we don't show the login tabs below
 
     # ============================================
-    # 🔑 NORMAL LOGIN / SIGNUP FLOW
+    # NORMAL LOGIN / SIGNUP FLOW
     # ============================================
-    tab_login, tab_signup = st.tabs(["🔑 Log In", "📝 Sign Up"])
+    tab_login, tab_signup = st.tabs(["Log In", "Sign Up"])
 
     with tab_login:
         with st.form("login_form"):
@@ -119,8 +122,8 @@ def show_login_page():
                     st.rerun()
                 else:
                     st.error(msg)
-        
-        if st.button("🔒 Forgot Password?"):
+
+        if st.button("Forgot Password?"):
             st.session_state.show_reset = True
             st.rerun()
 
@@ -142,21 +145,21 @@ def show_login_page():
                 else:
                     ok, msg = register_user(name, email, pw)
                     if ok:
-                        st.success("✅ " + msg)
+                        st.success("Success: " + msg)
                     else:
                         st.error(msg)
 
-    st.info("🔒 Passwords are hashed with bcrypt and stored locally.")
+    st.info("Passwords are hashed with bcrypt and stored locally.")
 
 
 # ============================================
-# 🧩 WATCHLIST MANAGER (sidebar)
+# WATCHLIST MANAGER (sidebar)
 # ============================================
 def watchlist_manager(email, watchlist):
-    st.sidebar.header("➕ Customize Watchlist")
+    st.sidebar.header("Customize Watchlist")
     new_ticker = st.sidebar.text_input("Add a ticker", placeholder="e.g. UBER").upper().strip()
 
-    if st.sidebar.button("➕ Add Stock", use_container_width=True):
+    if st.sidebar.button("Add Stock", use_container_width=True):
         if not new_ticker:
             st.sidebar.warning("Type a symbol first.")
         elif new_ticker in watchlist:
@@ -177,41 +180,41 @@ def watchlist_manager(email, watchlist):
             else:
                 st.sidebar.error(f"'{new_ticker}' not found. Check the symbol.")
 
-    st.sidebar.caption(f"📋 Your list: {len(watchlist)} stocks")
+    st.sidebar.caption(f"Your list: {len(watchlist)} stocks")
     for sym in list(watchlist):
         c1, c2 = st.sidebar.columns([4, 1])
         c1.markdown(f"`{sym}`")
-        if c2.button("❌", key=f"rm_{sym}"):
+        if c2.button("X", key=f"rm_{sym}"):
             watchlist.remove(sym)
             save_watchlist(email, watchlist)
             st.rerun()
 
-    if st.sidebar.button("🔄 Reset to default 20", use_container_width=True):
+    if st.sidebar.button("Reset to default 20", use_container_width=True):
         save_watchlist(email, list(DEFAULT_WATCHLIST))
         st.rerun()
 
 
 # ============================================
-# 📊 MAIN DASHBOARD
+# MAIN DASHBOARD
 # ============================================
 def show_dashboard(user):
     email = user["email"]
     watchlist = get_watchlist(email)
     gen = get_generator()
 
-    st.sidebar.title(f"👋 {user['name']}")
+    st.sidebar.title(f"{user['name']}")
     st.sidebar.caption(email)
-    if st.sidebar.button("🚪 Log Out", use_container_width=True):
+    if st.sidebar.button("Log Out", use_container_width=True):
         st.session_state.user = None
         st.rerun()
 
     selected = None
     if watchlist:
-        selected = st.sidebar.selectbox("📊 Select Symbol", watchlist)
+        selected = st.sidebar.selectbox("Select Symbol", watchlist)
 
     watchlist_manager(email, watchlist)
 
-    st.title("📈 Quant Trading Dashboard")
+    st.title("Quant Trading Dashboard")
     st.caption(f"Last updated: {datetime.now():%Y-%m-%d %H:%M:%S}")
 
     if not watchlist:
@@ -222,23 +225,23 @@ def show_dashboard(user):
         df = gen.generate_signals(selected)
         signal = gen.get_latest_signal(selected)
     except Exception as e:
-        st.error(f"❌ Error fetching data for {selected}: {e}")
+        st.error(f"Error fetching data for {selected}: {e}")
         st.stop()
 
     # Metrics row
     col1, col2, col3, col4, col5 = st.columns(5)
-    col1.metric("💰 Price", f"${signal['price']:.2f}", f"{signal['change_pct']:.2f}%")
-    col2.metric("🎯 Signal", signal['action'])
-    col3.metric("📊 Score", signal['signal_score'])
-    col4.metric("💪 Strength", f"{signal['signal_strength']:.1f}%")
-    col5.metric("📈 RSI", f"{signal['indicators']['RSI']:.1f}")
+    col1.metric("Price", f"${signal['price']:.2f}", f"{signal['change_pct']:.2f}%")
+    col2.metric("Signal", signal['action'])
+    col3.metric("Score", signal['signal_score'])
+    col4.metric("Strength", f"{signal['signal_strength']:.1f}%")
+    col5.metric("RSI", f"{signal['indicators']['RSI']:.1f}")
 
     if signal['action'] == 'BUY':
-        st.success(f"🟢 **BUY SIGNAL** — Score {signal['signal_score']} | Strength {signal['signal_strength']:.1f}%")
+        st.success(f"BUY SIGNAL — Score {signal['signal_score']} | Strength {signal['signal_strength']:.1f}%")
     elif signal['action'] == 'SELL':
-        st.error(f"🔴 **SELL SIGNAL** — Score {signal['signal_score']} | Strength {signal['signal_strength']:.1f}%")
+        st.error(f"SELL SIGNAL — Score {signal['signal_score']} | Strength {signal['signal_strength']:.1f}%")
     else:
-        st.warning(f"🟡 **HOLD** — Score {signal['signal_score']} | Strength {signal['signal_strength']:.1f}%")
+        st.warning(f"HOLD — Score {signal['signal_score']} | Strength {signal['signal_strength']:.1f}%")
 
     # Price chart
     fig = go.Figure()
@@ -266,7 +269,7 @@ def show_dashboard(user):
         st.plotly_chart(fig_macd, use_container_width=True)
 
     # Signals table for the user's personal watchlist
-    st.subheader("📋 Your Watchlist Signals")
+    st.subheader("Your Watchlist Signals")
     rows = []
     for sym in watchlist:
         try:
@@ -286,7 +289,7 @@ def show_dashboard(user):
 
 
 # ============================================
-# 🚦 APP ENTRY POINT
+# APP ENTRY POINT
 # ============================================
 if st.session_state.user:
     show_dashboard(st.session_state.user)
